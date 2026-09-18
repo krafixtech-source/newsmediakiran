@@ -60,37 +60,79 @@ async function getDriver(): Promise<DatabaseDriver> {
     };
   }
 
-  // SQLite persistent local driver
+  // Pure WebAssembly/JavaScript SQLite driver (zero native compile, runs on all Linux/Hostinger environments)
   if (!sqliteDb) {
     try {
-      const Database = (await import("better-sqlite3")).default;
+      const initSqlJs = (await import("sql.js")).default;
+      const SQL = await initSqlJs();
       const dataDir = path.join(process.cwd(), "data");
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
       }
       const dbPath = path.join(dataDir, "newsmediakiran.sqlite");
-      sqliteDb = new Database(dbPath);
-      sqliteDb.pragma("journal_mode = WAL");
+      if (fs.existsSync(dbPath)) {
+        const fileBuffer = fs.readFileSync(dbPath);
+        sqliteDb = new SQL.Database(fileBuffer);
+      } else {
+        sqliteDb = new SQL.Database();
+      }
     } catch (err) {
-      console.warn("Could not load better-sqlite3, falling back to in-memory:", err);
+      console.warn("Could not load SQLite driver, falling back to in-memory:", err);
       return new MemoryDatabaseDriver();
     }
   }
 
+  const persistToDisk = () => {
+    if (!sqliteDb) return;
+    try {
+      const dbPath = path.join(process.cwd(), "data", "newsmediakiran.sqlite");
+      const data = sqliteDb.export();
+      fs.writeFileSync(dbPath, Buffer.from(data));
+    } catch (err) {
+      console.error("Error saving SQLite database:", err);
+    }
+  };
+
   return {
     async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
-      // Normalize parameter placeholders: MySQL uses ?, better-sqlite3 uses ?
-      // Normalize common functions if any
-      const stmt = sqliteDb.prepare(sql);
-      return stmt.all(...params) as T[];
+      try {
+        const stmt = sqliteDb.prepare(sql);
+        if (params && params.length > 0) {
+          stmt.bind(params);
+        }
+        const rows: T[] = [];
+        while (stmt.step()) {
+          rows.push(stmt.getAsObject() as unknown as T);
+        }
+        stmt.free();
+        return rows;
+      } catch (err) {
+        console.error("SQL query error:", sql, err);
+        return [] as T[];
+      }
     },
     async execute(sql: string, params: any[] = []): Promise<{ insertId?: number; affectedRows: number }> {
-      const stmt = sqliteDb.prepare(sql);
-      const info = stmt.run(...params);
-      return {
-        insertId: Number(info.lastInsertRowid),
-        affectedRows: info.changes,
-      };
+      try {
+        if (params && params.length > 0) {
+          sqliteDb.run(sql, params);
+        } else {
+          sqliteDb.run(sql);
+        }
+        let insertId: number | undefined;
+        let affectedRows = 0;
+        try {
+          const res = sqliteDb.exec("SELECT last_insert_rowid() as id, changes() as changes");
+          if (res[0]?.values?.[0]) {
+            insertId = Number(res[0].values[0][0]);
+            affectedRows = Number(res[0].values[0][1]);
+          }
+        } catch {}
+        persistToDisk();
+        return { insertId, affectedRows };
+      } catch (err) {
+        console.error("SQL execute error:", sql, err);
+        return { affectedRows: 0 };
+      }
     },
   };
 }

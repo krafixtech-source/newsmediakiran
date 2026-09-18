@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  serverExternalPackages: ["better-sqlite3", "mysql2"],
+  serverExternalPackages: ["sql.js", "mysql2"],
 };
 
 export default nextConfig;
