@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncFromNewsMediaKiran } from "@/lib/sync/newsmediakiran";
 
+export async function GET(req: NextRequest) {
+  try {
+    const result = await syncFromNewsMediaKiran({ maxPages: 2 });
+    return NextResponse.json({
+      success: true,
+      message: "Automated live sync with newsmediakiran.com completed successfully.",
+      result,
+    });
+  } catch (err: any) {
+    console.error("Auto-sync error:", err);
+    return NextResponse.json(
+      { success: false, error: err.message || "Failed to auto-sync" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));

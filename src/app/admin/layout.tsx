@@ -11,7 +11,7 @@ import {
   Image as ImageIcon,
   Sliders,
   Settings,
-  RefreshCw,
+  Radio,
   LogOut,
   ExternalLink,
   Shield,
@@ -27,40 +27,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const isEn = language === "en";
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
   // If on login page, don't show admin chrome
   if (pathname === "/admin/login") {
     return <>{children}</>;
   }
-
-  const handleLiveSync = async () => {
-    setIsSyncing(true);
-    setSyncStatus(isEn ? "Connecting to newsmediakiran.com..." : "newsmediakiran.com से जुड़ रहे हैं...");
-    try {
-      const res = await fetch("/api/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ maxPages: 3 }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSyncStatus(
-          isEn
-            ? `Sync Complete! Added ${data.result?.newArticlesAdded || 0} new articles.`
-            : `सिंक सफल! ${data.result?.newArticlesAdded || 0} नए लेख जोड़े गए।`
-        );
-        setTimeout(() => setSyncStatus(null), 5000);
-      } else {
-        setSyncStatus((isEn ? "Sync failed: " : "सिंक विफल: ") + (data.error || "Unknown"));
-      }
-    } catch (err: any) {
-      setSyncStatus((isEn ? "Sync error: " : "सिंक त्रुटि: ") + err.message);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const navLinks = [
     { name: isEn ? "Dashboard" : "डैशबोर्ड (Dashboard)", href: "/admin/dashboard", icon: LayoutDashboard },
@@ -145,23 +116,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
         </div>
 
-        {/* Sidebar Footer with Live Sync and Site link */}
+        {/* Sidebar Footer with Live Auto-Sync indicator and Site link */}
         <div className="p-4 border-t border-gray-800 space-y-3">
-          {/* One-Click Sync Button */}
-          <button
-            onClick={handleLiveSync}
-            disabled={isSyncing}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-md text-xs font-bold transition-all shadow-xs cursor-pointer"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-            <span>{isSyncing ? (isEn ? "Syncing..." : "सिंक हो रहा है...") : (isEn ? "Sync newsmediakiran.com" : "लाइव डेटा सिंक करें")}</span>
-          </button>
-
-          {syncStatus && (
-            <div className="text-[11px] text-amber-300 bg-amber-950/40 p-2 rounded border border-amber-800 leading-tight">
-              {syncStatus}
+          {/* Automatic Live Sync Status */}
+          <div className="flex items-center gap-2.5 px-3 py-2 bg-emerald-950/40 border border-emerald-800/60 rounded-md text-[11px] font-semibold text-emerald-400">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="truncate">{isEn ? "Live Auto-Sync Active" : "स्वचालित सिंक सक्रिय"}</span>
+              <span className="text-[9px] text-gray-400 truncate">newsmediakiran.com 24/7</span>
             </div>
-          )}
+          </div>
 
           <div className="flex items-center justify-between text-xs text-gray-400 pt-1">
             <Link href="/" target="_blank" className="flex items-center gap-1 hover:text-white">

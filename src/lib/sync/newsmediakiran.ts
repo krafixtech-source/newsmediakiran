@@ -159,6 +159,15 @@ export async function syncFromNewsMediaKiran(options: { maxPages?: number } = {}
             ]
           );
           newArticlesCount++;
+        } else {
+          // Keep content & media in sync if updated on newsmediakiran.com
+          await dbExecute(
+            `UPDATE articles SET 
+              headline = ?, excerpt = ?, content = ?, featured_image = ?, mobile_image = ?,
+              reading_time = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ? OR slug = ?`,
+            [title, excerpt, content, featuredImage, featuredImage, readingTime, p.id, p.slug]
+          );
         }
         articlesCount++;
       }
@@ -176,3 +185,54 @@ export async function syncFromNewsMediaKiran(options: { maxPages?: number } = {}
     newArticlesAdded: newArticlesCount,
   };
 }
+
+// ==========================================
+// Automatic Background Sync Engine
+// ==========================================
+let isAutoSyncRunning = false;
+let lastAutoSyncAt = 0;
+const AUTO_SYNC_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes minimum interval
+
+export async function triggerAutoSyncIfNeeded(): Promise<void> {
+  const now = Date.now();
+  if (isAutoSyncRunning || now - lastAutoSyncAt < AUTO_SYNC_COOLDOWN_MS) {
+    return;
+  }
+
+  isAutoSyncRunning = true;
+  lastAutoSyncAt = now;
+
+  // Run in background without blocking caller
+  (async () => {
+    try {
+      console.log("⚡ [Auto-Sync] Checking newsmediakiran.com for new/updated stories...");
+      const res = await syncFromNewsMediaKiran({ maxPages: 1 });
+      if (res.newArticlesAdded > 0) {
+        console.log(`✅ [Auto-Sync] Fetched ${res.newArticlesAdded} brand new articles.`);
+      } else {
+        console.log("⚡ [Auto-Sync] Up to date (checked latest stories).");
+      }
+    } catch (err) {
+      console.error("⚠️ [Auto-Sync] Error during background check:", err);
+    } finally {
+      isAutoSyncRunning = false;
+    }
+  })();
+}
+
+// Background scheduler for Node.js server lifecycle
+if (typeof window === "undefined") {
+  const globalAny = globalThis as any;
+  if (!globalAny.__newsMediaKiranAutoSyncTimer) {
+    // Run an initial sync 5 seconds after startup
+    setTimeout(() => {
+      triggerAutoSyncIfNeeded().catch(() => {});
+    }, 5000);
+
+    // Then check periodically every 2.5 minutes
+    globalAny.__newsMediaKiranAutoSyncTimer = setInterval(() => {
+      triggerAutoSyncIfNeeded().catch(() => {});
+    }, 2.5 * 60 * 1000);
+  }
+}
+

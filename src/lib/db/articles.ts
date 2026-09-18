@@ -1,4 +1,5 @@
 import { dbQuery, dbExecute } from "./connection";
+import { triggerAutoSyncIfNeeded } from "../sync/newsmediakiran";
 
 export interface Article {
   id: number;
@@ -51,6 +52,9 @@ export async function getArticles(options: {
     search,
     status = "published",
   } = options;
+
+  // Fire-and-forget background auto-sync without slowing down current request
+  triggerAutoSyncIfNeeded().catch(() => {});
 
   let sql = "SELECT * FROM articles WHERE 1=1";
   const params: any[] = [];
