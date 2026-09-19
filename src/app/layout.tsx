@@ -68,6 +68,7 @@ export const metadata: Metadata = {
 import { LanguageProvider } from "@/context/LanguageContext";
 import { FloatingWhatsApp } from "@/components/common/FloatingWhatsApp";
 import { FloatingRatesWidget } from "@/components/common/FloatingRatesWidget";
+import { AutoSyncPoller } from "@/components/common/AutoSyncPoller";
 
 export default function RootLayout({
   children,
@@ -84,6 +85,7 @@ export default function RootLayout({
           {children}
           <FloatingRatesWidget />
           <FloatingWhatsApp />
+          <AutoSyncPoller />
         </LanguageProvider>
       </body>
     </html>

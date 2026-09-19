@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   // Fetch from database layer
   const [allArticles, topStories, mostRead, breakingItems] = await Promise.all([
-    getArticles({ limit: 40 }),
+    getArticles({ limit: 80 }),
     getTopStories(6),
     getMostRead(5),
     getBreakingNews(),

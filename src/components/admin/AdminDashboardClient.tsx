@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   FileText,
   Eye,
@@ -10,7 +11,12 @@ import {
   PlusCircle,
   TrendingUp,
   Image as ImageIcon,
-  ArrowRight
+  ArrowRight,
+  RefreshCw,
+  Radio,
+  Sparkles,
+  Check,
+  AlertCircle
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { Article } from "@/lib/db/articles";
@@ -35,6 +41,50 @@ export function AdminDashboardClient({
 }: AdminDashboardClientProps) {
   const { language } = useLanguage();
   const isEn = language === "en";
+  const router = useRouter();
+
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+  const [syncSuccess, setSyncSuccess] = useState<boolean | null>(null);
+
+  const handleSync = async (maxPages: number = 2) => {
+    setSyncing(true);
+    setSyncStatusMsg(
+      isEn
+        ? `Connecting to newsmediakiran.com (Fetching up to ${maxPages * 30} stories)...`
+        : `newsmediakiran.com से लाइव डेटा फेच हो रहा है (${maxPages * 30} तक समाचार)...`
+    );
+    setSyncSuccess(null);
+
+    try {
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxPages }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSyncSuccess(true);
+        const added = data.result?.newArticlesAdded || 0;
+        const processed = data.result?.articlesProcessed || 0;
+        setSyncStatusMsg(
+          isEn
+            ? `Live Sync Complete! Fetched ${added} brand new stories (${processed} processed, ${data.totalArticles} total in database).`
+            : `लाइव सिंक पूरा हुआ! ${added} नए समाचार जोड़े गए (${processed} प्रोसेस, कुल ${data.totalArticles} डेटाबेस में)।`
+        );
+        router.refresh();
+      } else {
+        setSyncSuccess(false);
+        setSyncStatusMsg(data.error || (isEn ? "Sync failed" : "सिंक विफल रहा"));
+      }
+    } catch (err: any) {
+      setSyncSuccess(false);
+      setSyncStatusMsg(err?.message || "Network error");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const statCards = [
     {
@@ -98,6 +148,74 @@ export function AdminDashboardClient({
             <span>{isEn ? "+ Add New Article" : "नया समाचार जोड़ें"}</span>
           </Link>
         </div>
+      </div>
+
+      {/* Live Sync Engine Control Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-zinc-900 to-red-950 text-white border border-red-900/50 rounded-xl p-5 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
+              <span className="text-xs font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
+                <Radio className="w-3.5 h-3.5" />
+                <span>{isEn ? "Continuous Live Auto-Sync Active" : "लाइव ऑटो-सिंक सक्रिय (Continuous Auto-Sync Active)"}</span>
+              </span>
+              <span className="bg-white/10 text-gray-300 text-[10px] font-mono px-2 py-0.5 rounded">
+                newsmediakiran.com
+              </span>
+            </div>
+            <p className="text-xs text-gray-300 max-w-2xl leading-relaxed">
+              {isEn
+                ? "The system automatically polls newsmediakiran.com every 2-3 minutes in the background to fetch and publish new stories without stopping. You can also trigger an immediate sync below."
+                : "सिस्टम स्वतः हर 2-3 मिनट में newsmediakiran.com से नई खबरों की जांच करता है और उन्हें तुरंत लाइव करता है। आप नीचे दिए गए बटनों से तुरंत भी फेच कर सकते हैं।"}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              onClick={() => handleSync(2)}
+              disabled={syncing}
+              className="px-3.5 py-2 bg-[#b91c1c] hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+              <span>{syncing ? (isEn ? "Syncing..." : "सिंक हो रहा है...") : (isEn ? "Sync Latest Now" : "ताज़ा समाचार सिंक करें")}</span>
+            </button>
+
+            <button
+              onClick={() => handleSync(6)}
+              disabled={syncing}
+              className="px-3.5 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white text-xs font-bold rounded-lg border border-white/20 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>{isEn ? "Deep Archive Sync (180+ Stories)" : "गहन बैकअप सिंक (180+ समाचार)"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Sync Status Feedback Bar */}
+        {syncStatusMsg && (
+          <div
+            className={`mt-4 p-3 rounded-lg text-xs font-medium flex items-center gap-2 ${
+              syncSuccess === true
+                ? "bg-emerald-950/80 border border-emerald-600/60 text-emerald-200"
+                : syncSuccess === false
+                ? "bg-red-950/80 border border-red-600/60 text-red-200"
+                : "bg-blue-950/80 border border-blue-600/60 text-blue-200"
+            }`}
+          >
+            {syncSuccess === true ? (
+              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : syncSuccess === false ? (
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            ) : (
+              <RefreshCw className="w-4 h-4 text-blue-400 animate-spin shrink-0" />
+            )}
+            <span>{syncStatusMsg}</span>
+          </div>
+        )}
       </div>
 
       {/* Metrics Cards */}
@@ -209,6 +327,7 @@ export function AdminDashboardClient({
           <table className="w-full text-left text-xs text-gray-600">
             <thead className="bg-gray-50 border-b border-gray-200 text-gray-700 font-bold uppercase tracking-wider text-[10px]">
               <tr>
+                <th className="px-4 py-3 w-16 text-center">{isEn ? "Photo" : "फोटो"}</th>
                 <th className="px-6 py-3">{isEn ? "Headline" : "शीर्षक (Headline)"}</th>
                 <th className="px-6 py-3">{isEn ? "Category" : "श्रेणी (Category)"}</th>
                 <th className="px-6 py-3">{isEn ? "Author" : "लेखक (Author)"}</th>
@@ -220,6 +339,22 @@ export function AdminDashboardClient({
             <tbody className="divide-y divide-gray-200">
               {recentArticles.map((art) => (
                 <tr key={art.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3">
+                    <div className="w-14 h-10 rounded overflow-hidden relative bg-gray-100 shrink-0 border border-gray-200 shadow-2xs">
+                      {art.featured_image ? (
+                        <img
+                          src={art.featured_image}
+                          alt={art.headline}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLElement).style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[9px] text-gray-400">No img</div>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-6 py-4 max-w-sm">
                     <span className="font-bold text-gray-900 line-clamp-1 block">
                       {art.headline}

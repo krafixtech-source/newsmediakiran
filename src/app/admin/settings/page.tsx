@@ -1,10 +1,34 @@
 "use client";
 
 import React, { useState } from "react";
-import { Settings, Database, Server, Check, AlertCircle } from "lucide-react";
+import { Settings, Database, Server, Check, AlertCircle, RefreshCw, Radio, Globe } from "lucide-react";
 
 export default function AdminSettingsPage() {
   const [saved, setSaved] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const triggerLiveSync = async (maxPages: number = 3) => {
+    setSyncing(true);
+    setSyncResult("newsmediakiran.com से संपर्क किया जा रहा है...");
+    try {
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxPages }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSyncResult(`✅ सफल: ${data.result?.newArticlesAdded || 0} नए समाचार जोड़े गए। कुल ${data.totalArticles} समाचार उपलब्ध हैं।`);
+      } else {
+        setSyncResult(`❌ त्रुटि: ${data.error || "सिंक विफल"}`);
+      }
+    } catch (e: any) {
+      setSyncResult(`❌ नेटवर्क त्रुटि: ${e?.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Hostinger MySQL Config State
   const [host, setHost] = useState("");
@@ -34,6 +58,54 @@ export default function AdminSettingsPage() {
         <p className="text-xs text-gray-500 mt-1">
           वेबसाइट का मुख्य विन्यास और Hostinger MySQL कनेक्शन क्रेडेंशियल्स
         </p>
+      </div>
+
+      {/* Live Sync Engine Control */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+          <div className="flex items-center gap-2 text-red-700">
+            <Radio className="w-5 h-5 text-red-600 animate-pulse" />
+            <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
+              लाइव न्यूज़ ऑटो-सिंक इंजन (Live Sync Engine • newsmediakiran.com)
+            </h3>
+          </div>
+          <span className="text-[11px] font-bold bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+            सक्रिय (Continuous Live)
+          </span>
+        </div>
+
+        <p className="text-xs text-gray-600 leading-relaxed">
+          सिस्टम हर 2-3 मिनट में पृष्ठभूमि (background) में <strong>https://newsmediakiran.com</strong> से ताज़ा समाचार, ब्रेकिंग न्यूज़, लेखक व श्रेणियां स्वतः फेच करता है। जब भी मूल वेबसाइट पर कोई नई खबर जोड़ी जाती है, वह बिना किसी मानवीय हस्तक्षेप के तुरंत आपकी साइट पर भी लाइव हो जाती है।
+        </p>
+
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => triggerLiveSync(3)}
+            disabled={syncing}
+            className="px-4 py-2 bg-[#b91c1c] hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-2 cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+            <span>{syncing ? "सिंक प्रगति पर है..." : "ताज़ा समाचार अभी फेच करें (Sync Now)"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => triggerLiveSync(8)}
+            disabled={syncing}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-800 text-xs font-bold rounded-lg border border-gray-300 transition-colors flex items-center gap-2 cursor-pointer"
+          >
+            <Globe className="w-4 h-4 text-gray-600" />
+            <span>गहन सिंक (Deep Sync 200+ Posts)</span>
+          </button>
+        </div>
+
+        {syncResult && (
+          <div className="p-3 bg-gray-50 border border-gray-200 rounded text-xs text-gray-800 font-medium">
+            {syncResult}
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSave} className="space-y-8">
